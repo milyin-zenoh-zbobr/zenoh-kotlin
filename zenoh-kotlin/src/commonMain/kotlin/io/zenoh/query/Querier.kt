@@ -14,7 +14,6 @@
 
 package io.zenoh.query
 
-import io.zenoh.annotations.Unstable
 import io.zenoh.bytes.Encoding
 import io.zenoh.bytes.IntoZBytes
 import io.zenoh.bytes.ZBytes
@@ -50,7 +49,7 @@ import kotlinx.coroutines.channels.Channel
  * ```
  *
  */
-class Querier internal constructor(val keyExpr: KeyExpr, val qos: QoS, private var jniQuerier: JNIQuerier?) :
+class Querier internal constructor(val keyExpr: KeyExpr, val qos: QoS, val acceptReplies: ReplyKeyExpr, private var jniQuerier: JNIQuerier?) :
     SessionDeclaration, AutoCloseable {
 
     /**
