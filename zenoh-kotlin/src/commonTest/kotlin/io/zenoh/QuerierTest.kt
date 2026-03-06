@@ -14,7 +14,6 @@
 
 package io.zenoh
 
-import io.zenoh.annotations.Unstable
 import io.zenoh.bytes.Encoding
 import io.zenoh.bytes.ZBytes
 import io.zenoh.keyexpr.KeyExpr
@@ -52,7 +51,6 @@ class QuerierTest {
     }
 
     /** Test validating both Queryable and get operations. */
-    @OptIn(Unstable::class)
     @Test
     fun querier_runsWithCallback() = runBlocking {
         val sample = Sample(

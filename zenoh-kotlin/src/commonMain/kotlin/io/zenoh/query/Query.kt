@@ -50,6 +50,22 @@ class Query internal constructor(
     val parameters = selector.parameters
 
     /**
+     * Returns the [ReplyKeyExpr] indicating whether this query accepts replies
+     * on key expressions that don't match the query's key expression.
+     */
+    fun acceptsReplies(): ReplyKeyExpr {
+        return if (parameters?.containsKey(REPLY_KEY_EXPR_ANY_SEL_PARAM) == true) {
+            ReplyKeyExpr.Any
+        } else {
+            ReplyKeyExpr.MatchingQuery
+        }
+    }
+
+    companion object {
+        private const val REPLY_KEY_EXPR_ANY_SEL_PARAM = "_anyke"
+    }
+
+    /**
      * Reply success to the remote [Query].
      *
      * A query can not be replied more than once. After the reply is performed, the query is considered
