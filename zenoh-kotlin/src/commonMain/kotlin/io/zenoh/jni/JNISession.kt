@@ -45,6 +45,17 @@ import io.zenoh.query.Parameters
 import io.zenoh.query.Selector
 import io.zenoh.qos.Reliability
 import io.zenoh.sample.SampleKind
+import io.zenoh.connectivity.Link
+import io.zenoh.connectivity.LinkEvent
+import io.zenoh.connectivity.LinkEventsListener
+import io.zenoh.connectivity.Transport
+import io.zenoh.connectivity.TransportEvent
+import io.zenoh.connectivity.TransportEventsListener
+import io.zenoh.config.WhatAmI
+import io.zenoh.handlers.LinkEventsCallback
+import io.zenoh.handlers.TransportEventsCallback
+import io.zenoh.jni.callbacks.JNILinkEventsCallback
+import io.zenoh.jni.callbacks.JNITransportEventsCallback
 import io.zenoh.ext.CacheConfig
 import io.zenoh.ext.HeartbeatMode
 import io.zenoh.ext.MissDetectionConfig
@@ -548,5 +559,209 @@ internal class JNISession {
         express: Boolean,
         attachmentBytes: ByteArray?,
         reliability: Int
+    )
+
+    fun getTransports(): Result<List<Transport>> = runCatching {
+        getTransportsViaJNI(sessionPtr.get()).map { item ->
+            @Suppress("UNCHECKED_CAST")
+            val arr = item as Array<Any>
+            Transport(
+                zid = ZenohId(arr[0] as ByteArray),
+                whatAmI = WhatAmI.fromInt(arr[1] as Int),
+                isQos = arr[2] as Boolean,
+                isMulticast = arr[3] as Boolean,
+            )
+        }
+    }
+
+    fun getLinks(transport: Transport?): Result<List<Link>> = runCatching {
+        getLinksViaJNI(
+            sessionPtr.get(),
+            transport?.zid?.bytes,
+            transport?.whatAmI?.value ?: 0,
+            transport?.isQos ?: false,
+            transport?.isMulticast ?: false,
+        ).map { item ->
+            @Suppress("UNCHECKED_CAST")
+            val arr = item as Array<Any>
+            val priorityMin = arr[9] as Int
+            val priorityMax = arr[10] as Int
+            val reliabilityOrdinal = arr[11] as Int
+            Link(
+                zid = ZenohId(arr[0] as ByteArray),
+                src = arr[1] as String,
+                dst = arr[2] as String,
+                group = arr[3] as String?,
+                mtu = arr[4] as Int,
+                isStreamed = arr[5] as Boolean,
+                interfaces = (arr[6] as Array<*>).map { it as String },
+                authIdentifier = arr[7] as String?,
+                priorityMin = if (priorityMin == -1) null else priorityMin,
+                priorityMax = if (priorityMax == -1) null else priorityMax,
+                reliability = if (reliabilityOrdinal == -1) null else Reliability.entries[reliabilityOrdinal],
+            )
+        }
+    }
+
+    fun declareTransportEventsListener(
+        callback: TransportEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+    ): Result<TransportEventsListener> = runCatching {
+        val jniCallback = JNITransportEventsCallback { kind, zidBytes, whatAmI, isQos, isMulticast ->
+            val event = TransportEvent(
+                kind = SampleKind.fromInt(kind),
+                transport = Transport(
+                    zid = ZenohId(zidBytes),
+                    whatAmI = WhatAmI.fromInt(whatAmI),
+                    isQos = isQos,
+                    isMulticast = isMulticast,
+                )
+            )
+            callback.run(event)
+        }
+        val ptr = declareTransportEventsListenerViaJNI(sessionPtr.get(), jniCallback, onClose, history)
+        TransportEventsListener(JNITransportEventsListener(ptr))
+    }
+
+    fun declareBackgroundTransportEventsListener(
+        callback: TransportEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+    ): Result<Unit> = runCatching {
+        val jniCallback = JNITransportEventsCallback { kind, zidBytes, whatAmI, isQos, isMulticast ->
+            val event = TransportEvent(
+                kind = SampleKind.fromInt(kind),
+                transport = Transport(
+                    zid = ZenohId(zidBytes),
+                    whatAmI = WhatAmI.fromInt(whatAmI),
+                    isQos = isQos,
+                    isMulticast = isMulticast,
+                )
+            )
+            callback.run(event)
+        }
+        declareBackgroundTransportEventsListenerViaJNI(sessionPtr.get(), jniCallback, onClose, history)
+    }
+
+    fun declareLinkEventsListener(
+        callback: LinkEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+        transport: Transport?,
+    ): Result<LinkEventsListener> = runCatching {
+        val jniCallback = JNILinkEventsCallback { kind, zidBytes, src, dst, group, mtu, isStreamed, interfaces, authIdentifier, priorityMin, priorityMax, reliability ->
+            val event = LinkEvent(
+                kind = SampleKind.fromInt(kind),
+                link = Link(
+                    zid = ZenohId(zidBytes),
+                    src = src,
+                    dst = dst,
+                    group = group,
+                    mtu = mtu,
+                    isStreamed = isStreamed,
+                    interfaces = interfaces.toList(),
+                    authIdentifier = authIdentifier,
+                    priorityMin = if (priorityMin == -1) null else priorityMin,
+                    priorityMax = if (priorityMax == -1) null else priorityMax,
+                    reliability = if (reliability == -1) null else Reliability.entries[reliability],
+                )
+            )
+            callback.run(event)
+        }
+        val ptr = declareLinkEventsListenerViaJNI(
+            sessionPtr.get(), jniCallback, onClose, history,
+            transport?.zid?.bytes,
+            transport?.whatAmI?.value ?: 0,
+            transport?.isQos ?: false,
+            transport?.isMulticast ?: false,
+        )
+        LinkEventsListener(JNILinkEventsListener(ptr))
+    }
+
+    fun declareBackgroundLinkEventsListener(
+        callback: LinkEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+        transport: Transport?,
+    ): Result<Unit> = runCatching {
+        val jniCallback = JNILinkEventsCallback { kind, zidBytes, src, dst, group, mtu, isStreamed, interfaces, authIdentifier, priorityMin, priorityMax, reliability ->
+            val event = LinkEvent(
+                kind = SampleKind.fromInt(kind),
+                link = Link(
+                    zid = ZenohId(zidBytes),
+                    src = src,
+                    dst = dst,
+                    group = group,
+                    mtu = mtu,
+                    isStreamed = isStreamed,
+                    interfaces = interfaces.toList(),
+                    authIdentifier = authIdentifier,
+                    priorityMin = if (priorityMin == -1) null else priorityMin,
+                    priorityMax = if (priorityMax == -1) null else priorityMax,
+                    reliability = if (reliability == -1) null else Reliability.entries[reliability],
+                )
+            )
+            callback.run(event)
+        }
+        declareBackgroundLinkEventsListenerViaJNI(
+            sessionPtr.get(), jniCallback, onClose, history,
+            transport?.zid?.bytes,
+            transport?.whatAmI?.value ?: 0,
+            transport?.isQos ?: false,
+            transport?.isMulticast ?: false,
+        )
+    }
+
+    @Throws(ZError::class)
+    private external fun getTransportsViaJNI(ptr: Long): List<Array<Any>>
+
+    @Throws(ZError::class)
+    private external fun getLinksViaJNI(
+        ptr: Long,
+        transportZid: ByteArray?,
+        transportWhatAmI: Int,
+        transportIsQos: Boolean,
+        transportIsMulticast: Boolean,
+    ): List<Array<Any>>
+
+    @Throws(ZError::class)
+    private external fun declareTransportEventsListenerViaJNI(
+        ptr: Long,
+        callback: JNITransportEventsCallback,
+        onClose: JNIOnCloseCallback,
+        history: Boolean,
+    ): Long
+
+    @Throws(ZError::class)
+    private external fun declareBackgroundTransportEventsListenerViaJNI(
+        ptr: Long,
+        callback: JNITransportEventsCallback,
+        onClose: JNIOnCloseCallback,
+        history: Boolean,
+    )
+
+    @Throws(ZError::class)
+    private external fun declareLinkEventsListenerViaJNI(
+        ptr: Long,
+        callback: JNILinkEventsCallback,
+        onClose: JNIOnCloseCallback,
+        history: Boolean,
+        transportZid: ByteArray?,
+        transportWhatAmI: Int,
+        transportIsQos: Boolean,
+        transportIsMulticast: Boolean,
+    ): Long
+
+    @Throws(ZError::class)
+    private external fun declareBackgroundLinkEventsListenerViaJNI(
+        ptr: Long,
+        callback: JNILinkEventsCallback,
+        onClose: JNIOnCloseCallback,
+        history: Boolean,
+        transportZid: ByteArray?,
+        transportWhatAmI: Int,
+        transportIsQos: Boolean,
+        transportIsMulticast: Boolean,
     )
 }
