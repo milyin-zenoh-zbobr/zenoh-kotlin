@@ -23,9 +23,8 @@ use zenoh::{
     config::WhatAmI,
     handlers::Callback,
     session::{
-        Link, LinkEvent, LinkEventsListener,
-        Session,
-        Transport, TransportEvent, TransportEventsListener,
+        Link, LinkEvent, LinkEventsListener, Session, Transport, TransportEvent,
+        TransportEventsListener,
     },
     Wait,
 };
@@ -70,7 +69,8 @@ unsafe fn decode_byte_array_raw(env: &mut JNIEnv, array: jbyteArray) -> ZResult<
     let jarray = JByteArray::from_raw(array);
     let len = env.get_array_length(&jarray).map_err(|e| zerror!(e))? as usize;
     let mut buf = vec![0i8; len];
-    env.get_byte_array_region(&jarray, 0, &mut buf).map_err(|e| zerror!(e))?;
+    env.get_byte_array_region(&jarray, 0, &mut buf)
+        .map_err(|e| zerror!(e))?;
     Ok(std::mem::transmute::<Vec<i8>, Vec<u8>>(buf))
 }
 
@@ -89,38 +89,62 @@ unsafe fn decode_transport_filter(
     let zid = zenoh::session::ZenohId::try_from(zid_bytes.as_slice())
         .map_err(|err| zerror!("Failed to decode ZenohId: {}", err))?;
     let whatami = decode_whatami(transport_whatami)?;
-    let transport = Transport::new_from_fields(zid, whatami, transport_is_qos != 0, transport_is_multicast != 0);
+    let transport = Transport::new_from_fields(
+        zid,
+        whatami,
+        transport_is_qos != 0,
+        transport_is_multicast != 0,
+    );
     Ok(Some(transport))
 }
 
 fn int_obj<'a>(env: &mut JNIEnv<'a>, val: jint) -> ZResult<JObject<'a>> {
-    env.call_static_method("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;",
-        &[JValue::from(val)])
-        .map_err(|e| zerror!(e))?
-        .l()
-        .map_err(|e| zerror!(e))
+    env.call_static_method(
+        "java/lang/Integer",
+        "valueOf",
+        "(I)Ljava/lang/Integer;",
+        &[JValue::from(val)],
+    )
+    .map_err(|e| zerror!(e))?
+    .l()
+    .map_err(|e| zerror!(e))
 }
 
 fn bool_obj<'a>(env: &mut JNIEnv<'a>, val: bool) -> ZResult<JObject<'a>> {
-    env.call_static_method("java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;",
-        &[JValue::from(val as jboolean)])
-        .map_err(|e| zerror!(e))?
-        .l()
-        .map_err(|e| zerror!(e))
+    env.call_static_method(
+        "java/lang/Boolean",
+        "valueOf",
+        "(Z)Ljava/lang/Boolean;",
+        &[JValue::from(val as jboolean)],
+    )
+    .map_err(|e| zerror!(e))?
+    .l()
+    .map_err(|e| zerror!(e))
 }
 
 /// Encode a Transport as an Object[4] array: [zidBytes, Integer(whatami), Boolean(isQos), Boolean(isMulticast)]
-fn transport_to_java_array<'a>(env: &mut JNIEnv<'a>, transport: &Transport) -> ZResult<JObjectArray<'a>> {
-    let zid_bytes = env.byte_array_from_slice(&transport.zid().to_le_bytes()).map_err(|e| zerror!(e))?;
+fn transport_to_java_array<'a>(
+    env: &mut JNIEnv<'a>,
+    transport: &Transport,
+) -> ZResult<JObjectArray<'a>> {
+    let zid_bytes = env
+        .byte_array_from_slice(&transport.zid().to_le_bytes())
+        .map_err(|e| zerror!(e))?;
     let whatami_obj = int_obj(env, whatami_to_int(transport.whatami()))?;
     let is_qos_obj = bool_obj(env, transport.is_qos())?;
     let is_multicast_obj = bool_obj(env, transport.is_multicast())?;
 
-    let arr = env.new_object_array(4, "java/lang/Object", JObject::null()).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 0, zid_bytes).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 1, whatami_obj).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 2, is_qos_obj).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 3, is_multicast_obj).map_err(|e| zerror!(e))?;
+    let arr = env
+        .new_object_array(4, "java/lang/Object", JObject::null())
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 0, zid_bytes)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 1, whatami_obj)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 2, is_qos_obj)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 3, is_multicast_obj)
+        .map_err(|e| zerror!(e))?;
 
     Ok(arr)
 }
@@ -130,9 +154,15 @@ fn transport_to_java_array<'a>(env: &mut JNIEnv<'a>, transport: &Transport) -> Z
 /// [6]=interfaces[], [7]=authId?, [8]=unused, [9]=priorityMin, [10]=priorityMax, [11]=reliability
 fn link_to_java_array<'a>(env: &mut JNIEnv<'a>, link: &Link) -> ZResult<JObjectArray<'a>> {
     // Pre-compute all objects before creating/filling the array to avoid borrow conflicts
-    let zid_bytes = env.byte_array_from_slice(&link.zid().to_le_bytes()).map_err(|e| zerror!(e))?;
-    let src = env.new_string(link.src().to_string()).map_err(|e| zerror!(e))?;
-    let dst = env.new_string(link.dst().to_string()).map_err(|e| zerror!(e))?;
+    let zid_bytes = env
+        .byte_array_from_slice(&link.zid().to_le_bytes())
+        .map_err(|e| zerror!(e))?;
+    let src = env
+        .new_string(link.src().to_string())
+        .map_err(|e| zerror!(e))?;
+    let dst = env
+        .new_string(link.dst().to_string())
+        .map_err(|e| zerror!(e))?;
     let group: Option<jni::objects::JString> = if let Some(g) = link.group() {
         Some(env.new_string(format!("{}", g)).map_err(|e| zerror!(e))?)
     } else {
@@ -142,10 +172,13 @@ fn link_to_java_array<'a>(env: &mut JNIEnv<'a>, link: &Link) -> ZResult<JObjectA
     let is_streamed_obj = bool_obj(env, link.is_streamed())?;
 
     let ifaces = link.interfaces();
-    let ifaces_arr = env.new_object_array(ifaces.len() as jint, "java/lang/String", JObject::null()).map_err(|e| zerror!(e))?;
+    let ifaces_arr = env
+        .new_object_array(ifaces.len() as jint, "java/lang/String", JObject::null())
+        .map_err(|e| zerror!(e))?;
     for (i, iface) in ifaces.iter().enumerate() {
         let s = env.new_string(iface).map_err(|e| zerror!(e))?;
-        env.set_object_array_element(&ifaces_arr, i as jint, s).map_err(|e| zerror!(e))?;
+        env.set_object_array_element(&ifaces_arr, i as jint, s)
+            .map_err(|e| zerror!(e))?;
     }
 
     let auth: Option<jni::objects::JString> = if let Some(a) = link.auth_identifier() {
@@ -161,23 +194,37 @@ fn link_to_java_array<'a>(env: &mut JNIEnv<'a>, link: &Link) -> ZResult<JObjectA
     let rel = link.reliability().map(reliability_to_int).unwrap_or(-1);
     let rel_obj = int_obj(env, rel)?;
 
-    let arr = env.new_object_array(12, "java/lang/Object", JObject::null()).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 0, zid_bytes).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 1, src).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 2, dst).map_err(|e| zerror!(e))?;
+    let arr = env
+        .new_object_array(12, "java/lang/Object", JObject::null())
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 0, zid_bytes)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 1, src)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 2, dst)
+        .map_err(|e| zerror!(e))?;
     if let Some(g) = group {
-        env.set_object_array_element(&arr, 3, g).map_err(|e| zerror!(e))?;
+        env.set_object_array_element(&arr, 3, g)
+            .map_err(|e| zerror!(e))?;
     }
-    env.set_object_array_element(&arr, 4, mtu_obj).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 5, is_streamed_obj).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 6, ifaces_arr).map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 4, mtu_obj)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 5, is_streamed_obj)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 6, ifaces_arr)
+        .map_err(|e| zerror!(e))?;
     if let Some(a) = auth {
-        env.set_object_array_element(&arr, 7, a).map_err(|e| zerror!(e))?;
+        env.set_object_array_element(&arr, 7, a)
+            .map_err(|e| zerror!(e))?;
     }
-    env.set_object_array_element(&arr, 8, dummy).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 9, pmin_obj).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 10, pmax_obj).map_err(|e| zerror!(e))?;
-    env.set_object_array_element(&arr, 11, rel_obj).map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 8, dummy)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 9, pmin_obj)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 10, pmax_obj)
+        .map_err(|e| zerror!(e))?;
+    env.set_object_array_element(&arr, 11, rel_obj)
+        .map_err(|e| zerror!(e))?;
 
     Ok(arr)
 }
@@ -197,7 +244,9 @@ pub unsafe extern "C" fn Java_io_zenoh_jni_JNISession_getTransportsViaJNI(
     let session = Arc::from_raw(session_ptr);
     let result = || -> ZResult<jobject> {
         let transports = session.info().transports().wait();
-        let list = env.new_object("java/util/ArrayList", "()V", &[]).map_err(|e| zerror!(e))?;
+        let list = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| zerror!(e))?;
         use jni::objects::JList;
         let jlist = JList::from_env(&mut env, &list).map_err(|e| zerror!(e))?;
         for t in transports {
@@ -232,7 +281,12 @@ pub unsafe extern "C" fn Java_io_zenoh_jni_JNISession_getLinksViaJNI(
     let session = Arc::from_raw(session_ptr);
     let result = || -> ZResult<jobject> {
         let transport_filter = decode_transport_filter(
-            &mut env, transport_zid, transport_whatami, transport_is_qos, transport_is_multicast)?;
+            &mut env,
+            transport_zid,
+            transport_whatami,
+            transport_is_qos,
+            transport_is_multicast,
+        )?;
 
         let links = {
             let info = session.info();
@@ -243,7 +297,9 @@ pub unsafe extern "C" fn Java_io_zenoh_jni_JNISession_getLinksViaJNI(
             }
         };
 
-        let list = env.new_object("java/util/ArrayList", "()V", &[]).map_err(|e| zerror!(e))?;
+        let list = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| zerror!(e))?;
         use jni::objects::JList;
         let jlist = JList::from_env(&mut env, &list).map_err(|e| zerror!(e))?;
         for link in links {
@@ -276,11 +332,13 @@ unsafe fn make_transport_events_callback(
     Ok(Callback::from(move |event: TransportEvent| {
         on_close.noop();
         let _ = || -> ZResult<()> {
-            let mut env = java_vm.attach_current_thread_as_daemon()
+            let mut env = java_vm
+                .attach_current_thread_as_daemon()
                 .map_err(|err| zerror!("Unable to attach thread for transport events: {}", err))?;
 
             let kind = event.kind() as jint;
-            let zid_bytes = env.byte_array_from_slice(&event.transport().zid().to_le_bytes())
+            let zid_bytes = env
+                .byte_array_from_slice(&event.transport().zid().to_le_bytes())
                 .map_err(|e| zerror!(e))?;
             let whatami = whatami_to_int(event.transport().whatami());
             let is_qos = event.transport().is_qos() as jboolean;
@@ -297,7 +355,8 @@ unsafe fn make_transport_events_callback(
                     JValue::from(is_qos),
                     JValue::from(is_multicast),
                 ],
-            ).map_err(|e| zerror!(e))?;
+            )
+            .map_err(|e| zerror!(e))?;
             Ok(())
         }()
         .map_err(|err| tracing::error!("On transport events callback error: {err}"));
@@ -435,7 +494,12 @@ pub unsafe extern "C" fn Java_io_zenoh_jni_JNISession_declareBackgroundTransport
             .with(cb)
             .background()
             .wait()
-            .map_err(|err| zerror!("Unable to declare background transport events listener: {}", err))
+            .map_err(|err| {
+                zerror!(
+                    "Unable to declare background transport events listener: {}",
+                    err
+                )
+            })
     }();
     mem::forget(session);
     result.unwrap_or_else(|err| throw_exception!(env, err));
@@ -474,7 +538,12 @@ pub unsafe extern "C" fn Java_io_zenoh_jni_JNISession_declareLinkEventsListenerV
     let session = Arc::from_raw(session_ptr);
     let result = || -> ZResult<jlong> {
         let transport_filter = decode_transport_filter(
-            &mut env, transport_zid, transport_whatami, transport_is_qos, transport_is_multicast)?;
+            &mut env,
+            transport_zid,
+            transport_whatami,
+            transport_is_qos,
+            transport_is_multicast,
+        )?;
         let cb = make_link_events_callback(&mut env, callback, on_close)?;
 
         let info = session.info();
@@ -511,22 +580,26 @@ pub unsafe extern "C" fn Java_io_zenoh_jni_JNISession_declareBackgroundLinkEvent
     transport_is_multicast: jboolean,
 ) {
     let session = Arc::from_raw(session_ptr);
-    let result = || -> ZResult<()> {
-        let transport_filter = decode_transport_filter(
-            &mut env, transport_zid, transport_whatami, transport_is_qos, transport_is_multicast)?;
-        let cb = make_link_events_callback(&mut env, callback, on_close)?;
+    let result =
+        || -> ZResult<()> {
+            let transport_filter = decode_transport_filter(
+                &mut env,
+                transport_zid,
+                transport_whatami,
+                transport_is_qos,
+                transport_is_multicast,
+            )?;
+            let cb = make_link_events_callback(&mut env, callback, on_close)?;
 
-        let info = session.info();
-        let mut builder = info.link_events_listener().history(history != 0);
-        if let Some(t) = transport_filter {
-            builder = builder.transport(t);
-        }
-        builder
-            .with(cb)
-            .background()
-            .wait()
-            .map_err(|err| zerror!("Unable to declare background link events listener: {}", err))
-    }();
+            let info = session.info();
+            let mut builder = info.link_events_listener().history(history != 0);
+            if let Some(t) = transport_filter {
+                builder = builder.transport(t);
+            }
+            builder.with(cb).background().wait().map_err(|err| {
+                zerror!("Unable to declare background link events listener: {}", err)
+            })
+        }();
     mem::forget(session);
     result.unwrap_or_else(|err| throw_exception!(env, err));
 }
