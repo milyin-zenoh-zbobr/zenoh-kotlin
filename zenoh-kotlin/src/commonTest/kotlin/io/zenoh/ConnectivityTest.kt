@@ -28,22 +28,20 @@ import kotlin.test.assertTrue
 class ConnectivityTest {
 
     companion object {
-        private const val LISTEN_PORT = 7460
-        private const val LISTEN_ENDPOINT = "tcp/localhost:$LISTEN_PORT"
-
-        private fun listenerConfig() = Config.fromJson(
-            """{ mode: "peer", listen: { endpoints: ["$LISTEN_ENDPOINT"] } }"""
+        private fun listenerConfig(port: Int) = Config.fromJson(
+            """{ mode: "peer", listen: { endpoints: ["tcp/localhost:$port"] } }"""
         ).getOrThrow()
 
-        private fun connectConfig() = Config.fromJson(
-            """{ mode: "peer", connect: { endpoints: ["$LISTEN_ENDPOINT"] } }"""
+        private fun connectConfig(port: Int) = Config.fromJson(
+            """{ mode: "peer", connect: { endpoints: ["tcp/localhost:$port"] } }"""
         ).getOrThrow()
     }
 
     @Test
     fun `transports list is non-empty when connected`() {
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val port = 7465
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         Thread.sleep(500)
 
@@ -60,8 +58,9 @@ class ConnectivityTest {
 
     @Test
     fun `links list is non-empty when connected`() {
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val port = 7466
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         Thread.sleep(500)
 
@@ -78,8 +77,9 @@ class ConnectivityTest {
 
     @Test
     fun `links list filtered by transport`() {
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val port = 7467
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         Thread.sleep(500)
 
@@ -101,12 +101,13 @@ class ConnectivityTest {
 
     @Test
     fun `transport events listener receives PUT on connect and DELETE on disconnect`() = runBlocking {
+        val port = 7468
         val channel = Channel<TransportEvent>(10)
 
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
         val listener = sessionA.info().declareTransportEventsListener(channel).getOrThrow()
 
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         // Should receive PUT event when B connects
         val putEvent = withTimeoutOrNull(3000) { channel.receive() }
@@ -127,8 +128,9 @@ class ConnectivityTest {
 
     @Test
     fun `transport events listener with history delivers existing transport`() = runBlocking {
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val port = 7469
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         Thread.sleep(500)
 
@@ -148,12 +150,13 @@ class ConnectivityTest {
 
     @Test
     fun `link events listener receives PUT on connect and DELETE on disconnect`() = runBlocking {
+        val port = 7470
         val channel = Channel<LinkEvent>(10)
 
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
         val listener = sessionA.info().declareLinkEventsListener(channel).getOrThrow()
 
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         // Should receive PUT event when link is established
         val putEvent = withTimeoutOrNull(3000) { channel.receive() }
@@ -176,8 +179,9 @@ class ConnectivityTest {
 
     @Test
     fun `link events listener with history and transport filter`() = runBlocking {
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val port = 7471
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         Thread.sleep(500)
 
@@ -204,10 +208,11 @@ class ConnectivityTest {
 
     @Test
     fun `background transport events listener fires callback`() {
+        val port = 7472
         val events = mutableListOf<TransportEvent>()
         val latch = java.util.concurrent.CountDownLatch(1)
 
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
         sessionA.info().declareBackgroundTransportEventsListener(
             callback = { event ->
                 if (event.kind == SampleKind.PUT) {
@@ -217,7 +222,7 @@ class ConnectivityTest {
             }
         ).getOrThrow()
 
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         assertTrue(latch.await(3, java.util.concurrent.TimeUnit.SECONDS), "Background listener should fire")
         assertTrue(events.isNotEmpty())
@@ -228,10 +233,11 @@ class ConnectivityTest {
 
     @Test
     fun `background link events listener fires callback`() {
+        val port = 7473
         val events = mutableListOf<LinkEvent>()
         val latch = java.util.concurrent.CountDownLatch(1)
 
-        val sessionA = Zenoh.open(listenerConfig()).getOrThrow()
+        val sessionA = Zenoh.open(listenerConfig(port)).getOrThrow()
         sessionA.info().declareBackgroundLinkEventsListener(
             callback = { event ->
                 if (event.kind == SampleKind.PUT) {
@@ -241,7 +247,7 @@ class ConnectivityTest {
             }
         ).getOrThrow()
 
-        val sessionB = Zenoh.open(connectConfig()).getOrThrow()
+        val sessionB = Zenoh.open(connectConfig(port)).getOrThrow()
 
         assertTrue(latch.await(3, java.util.concurrent.TimeUnit.SECONDS), "Background link listener should fire")
         assertTrue(events.isNotEmpty())
