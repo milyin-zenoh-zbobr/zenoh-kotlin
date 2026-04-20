@@ -13,6 +13,7 @@
 //
 
 mod config;
+mod connectivity;
 mod errors;
 #[cfg(feature = "zenoh-ext")]
 mod ext;

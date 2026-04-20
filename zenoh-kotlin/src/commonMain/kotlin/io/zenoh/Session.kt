@@ -45,6 +45,12 @@ import io.zenoh.qos.Reliability
 import io.zenoh.session.SessionDeclaration
 import io.zenoh.session.SessionInfo
 import io.zenoh.pubsub.Subscriber
+import io.zenoh.connectivity.Link
+import io.zenoh.connectivity.LinkEventsListener
+import io.zenoh.connectivity.Transport
+import io.zenoh.connectivity.TransportEventsListener
+import io.zenoh.handlers.LinkEventsCallback
+import io.zenoh.handlers.TransportEventsCallback
 import kotlinx.coroutines.channels.Channel
 import java.lang.ref.WeakReference
 import java.time.Duration
@@ -1197,6 +1203,54 @@ class Session private constructor(private val config: Config) : AutoCloseable {
 
     internal fun getRoutersId(): Result<List<ZenohId>> {
         return jniSession?.routersZid() ?: Result.failure(sessionClosedException)
+    }
+
+    internal fun getTransports(): Result<List<Transport>> {
+        return jniSession?.getTransports() ?: Result.failure(sessionClosedException)
+    }
+
+    internal fun getLinks(transport: Transport?): Result<List<Link>> {
+        return jniSession?.getLinks(transport) ?: Result.failure(sessionClosedException)
+    }
+
+    internal fun declareTransportEventsListener(
+        callback: TransportEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+    ): Result<TransportEventsListener> {
+        return jniSession?.declareTransportEventsListener(callback, onClose, history)
+            ?.onSuccess { strongDeclarations.add(it) }
+            ?: Result.failure(sessionClosedException)
+    }
+
+    internal fun declareBackgroundTransportEventsListener(
+        callback: TransportEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+    ): Result<Unit> {
+        return jniSession?.declareBackgroundTransportEventsListener(callback, onClose, history)
+            ?: Result.failure(sessionClosedException)
+    }
+
+    internal fun declareLinkEventsListener(
+        callback: LinkEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+        transport: Transport?,
+    ): Result<LinkEventsListener> {
+        return jniSession?.declareLinkEventsListener(callback, onClose, history, transport)
+            ?.onSuccess { strongDeclarations.add(it) }
+            ?: Result.failure(sessionClosedException)
+    }
+
+    internal fun declareBackgroundLinkEventsListener(
+        callback: LinkEventsCallback,
+        onClose: () -> Unit,
+        history: Boolean,
+        transport: Transport?,
+    ): Result<Unit> {
+        return jniSession?.declareBackgroundLinkEventsListener(callback, onClose, history, transport)
+            ?: Result.failure(sessionClosedException)
     }
 
     /** Launches the session through the jni session, returning the [Session] on success. */
