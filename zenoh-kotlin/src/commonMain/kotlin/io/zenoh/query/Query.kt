@@ -180,6 +180,7 @@ class Query internal constructor(
             ReplyKeyExpr.MATCHING_QUERY
         }
     }
+
     @Deprecated(
         message = "Use replyDel with ReplyQoS instead of QoS. Priority and congestion control are not applicable to replies.",
         replaceWith = ReplaceWith("replyDel(keyExpr, ReplyQoS(express = qos.express), timestamp, attachment)", "io.zenoh.qos.ReplyQoS")
